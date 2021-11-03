@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Socket Client</title>
+  <script type="text/javascript" src="/socketcluster-client.js"></script>
+  <script type="text/javascript" src="/run_prettify.js"></script>
+  <script type="text/javascript" src="/ulid.js"></script>
+</head>
+
+<body>
+  <label>Channel:</label>
+  <br />
+  <input id="channel" />
+  <button id="subscribe" onclick="subscribe()">Subscribe</button>
+  <button id="unsubscribe" onclick="unsubscribe()">Unsubscribe</button>
+  <button id="check" onclick="check()">Check Socket</button>
+  <button id="checkMethods" onclick="checkMethods()">Get Methods</button>
+  <br />
+  <br />
+  <label>Message:</label>
+  <br />
+  <input id="message" />
+  <button id="publish" onclick="publish()">Publish</button>
+  <br />
+  <p id="messages"></p>
+  <ul id="terminal" id="debug"></ul>
+  <pre class="prettyprint" id="debug"></pre>
+  <script type="text/javascript">
+
+    var getPort = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    var getPort = urlParams.get('port');
+    
+
+    port = 8000;
+    if (getPort != null) {
+        port = getPort;
+    }
+
+    function write(text, msgs) {
+      var date = new Date();
+      var dateText = '[' + date.getFullYear() + '-' + (date.getMonth() + 1 > 9 ? date.getMonth() + 1 : '0' + date.getMonth() + 1) + '-' + (date.getDate() > 9 ? date.getDate() : '0' + date.getDate()) + ' ' + (date.getHours() > 9 ? date.getHours() : '0' + date.getHours()) + ':' + (date.getMinutes() > 9 ? date.getMinutes() : '0' + date.getMinutes()) + ':' + (date.getSeconds() > 9 ? date.getSeconds() : '0' + date.getSeconds()) + ']';
+      var terminal = document.getElementById('terminal');
+      var messages = document.getElementById('messages');
+
+      if (terminal.innerHTML.length > 5000) {
+        terminal.innerHTML = '';
+      }
+
+      terminal.innerHTML = '<li>' + dateText + ' ' + text + '</li>' + terminal.innerHTML;
+      messages.innerHTML = msgs;
+    }
+
+    JSON.safeStringify = (obj, indent = 2) => {
+      let cache = [];
+      const retVal = JSON.stringify(
+        obj,
+        (key, value) =>
+          typeof value === "object" && value !== null
+            ? cache.includes(value)
+              ? undefined
+              : cache.push(value) && value
+            : value,
+        indent
+      );
+      cache = null;
+      return retVal;
+    };
+
+    function writeDebug(text) {
+      var data = JSON.safeStringify(text);
+      var debug = document.getElementById('debug');
+
+      debug.innerHTML = data;
+    }
+
+    //set token to auth
+    //localStorage.setItem('socketCluster.authToken', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJTV05jSC1idUFJTjhjWFFBQUFBMiIsImV4cCI6OTAwLCJpYXQiOjE1NzA2NDgzMDAsImlzcyI6IlNXTmNILWJ1QUlOOGNYUUFBQUEyIiwic3ViIjoiZDMxZDhlZjc0NDhiNzRiYjgwOGUzZWU4YTI5ZmNhNGNiNzc4ZDE5OTdhNjk2MTZkYTJhYTRiYzBlM2FmZThmYSJ9.9srgsSTCjHEStu/hjFXpxrY20lR0b3+S7KvIH4dRY/w=');
+    var host = 'localhost:' + port;
+    var socket = socketClusterClient.create(
+      {
+        host: host
+      }
+    );
+
+    // var socket = socketClusterClient.connect({
+    //   query: {
+    //     auth: 'f2nnCd2DACeibe7OZGfMJJk1aWCVJPU1',
+    //   }
+    // });
+
+    var messages = 0;
+    var socketId = null;
+    var myChannel = null;
+
+    function subscribe() {
+      (async () => {
+        var channel = document.getElementById('channel').value;
+
+        var alreadySub = socket.isSubscribed(channel);
+        if (alreadySub) {
+          write('Already subscribed the channel ' + channel, messages);
+          return;
+        }
+
+        myChannel = socket.subscribe(channel);
+        write('Subscribe to channel: ' + channel, messages);
+
+        for await (var data of myChannel) {
+          messages++;
+          jsonData = JSON.stringify(data);
+          write('Channel ' + channel + ' message: ' + jsonData, messages);
+        }
+
+
+      })();
+    }
+
+    function check() {
+      writeDebug(socket);
+    }
+
+    function checkMethods() {
+      writeDebug(getMethods(socket));
+    }
+
+    function publish() {
+      (async () => {
+        var channel = document.getElementById('channel').value;
+        var message = document.getElementById('message').value;
+
+        var data = {
+          id: ULID.ulid(),
+          data: message
+        };
+
+        try {
+          await socket.invokePublish(channel, data);
+        } catch (error) {
+        }
+      })();
+
+    }
+
+    function getMethods(obj) {
+      var result = [];
+      for (var id in obj) {
+        try {
+          if (typeof (obj[id]) == "function") {
+            result.push(id);
+          }
+        } catch (err) {
+          result.push(id + ": error");
+        }
+      }
+      return result;
+    }
+
+    function unsubscribe() {
+      var channel = document.getElementById('channel').value;
+
+      var alreadySub = socket.isSubscribed(channel);
+      if (alreadySub) {
+        myChannel.close();
+        socket.unsubscribe(channel);
+        write('Unsubscribe to channel: ' + channel, messages);
+      }
+    }
+  </script>
+</body>
+
+</html>
